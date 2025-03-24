@@ -23,13 +23,6 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
-// Configure Redis
-//builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
-//{
-//    var configuration = builder.Configuration.GetSection("Redis:ConnectionString").Value;
-//    return ConnectionMultiplexer.Connect(configuration);
-//});
-
 builder.Services.AddSingleton<IRedisService>(new RedisService(builder.Configuration.GetSection("Redis:ConnectionString").Value));
 builder.Services.AddSingleton<IRoomService, RoomService>();
 builder.Services.AddSingleton<IUserService, UserService>();
