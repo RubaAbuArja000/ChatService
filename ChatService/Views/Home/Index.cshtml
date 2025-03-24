@@ -1,0 +1,358 @@
+﻿@{
+    var username = ViewBag.Username as string;
+}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignalR Chat Client</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@5.0.12/dist/browser/signalr.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <style>
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 60%;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .left {
+            align-self: flex-start;
+            background-color: #f5f6f7;
+            ad margin-left: 0;
+        }
+
+        .right {
+            align-self: flex-end;
+            margin-left: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+        }
+
+        .short {
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-3 border-end">
+                <h4>Rooms</h4>
+                <ul class="list-group" id="roomList">
+                </ul>
+                <div class="mt-3">
+                    <input type="text" id="inputRoomName" class="form-control" placeholder="Enter new room name">
+                </div>
+                <button id="btnCreateRoom" class="btn btn-primary mt-3">Create Room</button>
+            </div>
+
+            <div id="chatArea" class="col-9">
+                <div class="border-bottom p-3">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; margin-top: 10px;">
+                        <div style="flex: 1;">
+                            <h4>Room 1</h4>
+                        </div>
+                        <div style="font-size: 16px; font-weight: bold; text-align: right;">
+                            @if (!string.IsNullOrEmpty(ViewBag.Username))
+                            {
+                                <p>Welcome, @ViewBag.Username!</p>
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-window p-3" style="height: 80vh; overflow-y: scroll;">
+                </div>
+
+                <div class="input-group mt-3">
+                    <input id="messageInput" type="text" class="form-control" placeholder="Type a message">
+                    <button id="sendMessageBtn" class="btn btn-primary">Send</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="usernameModal" tabindex="-1" aria-labelledby="usernameModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="usernameModalLabel">Enter Your Username</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="usernameInput" class="form-control" placeholder="Enter your username">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="submitUsernameBtn">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            let rooms = [];
+            let currentRoomId;
+            var username = '@ViewBag.Username';
+            if (!username)
+                $('#usernameModal').modal('show');
+            else
+                loadRooms();
+
+            $('#btnCreateRoom').click(function() {
+                var roomName = $('#inputRoomName').val();
+                if (roomName)
+                    createRoom(roomName);
+            });
+            $('#submitUsernameBtn').click(function() {
+                this.username = $('#usernameInput').val();
+
+                $.ajax({
+                    url: '/api/auth/login',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        username: this.username
+                    }),
+                    success: function(response) {
+                        $('#usernameModal').modal('hide');
+                        loadRooms();
+                    },
+                    error: function(xhr, status, error) {
+                        console.log('Error sending message:', error);
+                    }
+                });
+
+            });
+
+            $('#sendMessageBtn').click(function() {
+                var messageText = $('#messageInput').val();
+
+                if (messageText) {
+                    $.ajax({
+                        url: '/api/rooms/' + currentRoomId + '/messages',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            message: messageText
+                        }),
+                        success: function(response) {
+                            $('#messageInput').val('')
+                        },
+                        error: function(xhr, status, error) {
+                            console.log('Error sending message:', error);
+                        }
+                    });
+                } else {
+                    alert('Please enter a message');
+                }
+            });
+
+            function loadRooms() {
+                $.ajax({
+                    url: '/api/rooms',
+                    method: 'GET',
+                    success: function(response) {
+                        rooms = response;
+                        renderRooms();
+                    },
+                    error: function(xhr, status, error) {
+                        alert("Error loading rooms: " + error);
+                    }
+                });
+
+            }
+
+            function createRoom(roomName) {
+                if (roomName) {
+                    $.ajax({
+                        url: '/api/rooms',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({
+                            roomName: roomName
+                        }),
+                        success: function(response) {
+                            rooms.push(response);
+                            renderRooms();
+                        },
+                        error: function(xhr, status, error) {
+                            alert("Error creating room: " + error);
+                        }
+                    });
+                }
+            }
+
+            function renderRooms() {
+                $('#roomList').empty();
+
+                rooms.forEach(function(room) {
+                          var li = $('<li>', {
+                              class: 'list-group-item d-flex justify-content-between align-items-center',
+                              html: room.roomName + ' <span class="login-count">Login Count: ' + room.loginCount + '</span>'
+                          });
+
+                    var joinButton = $('<button>', {
+                        class: 'btn btn-primary btn-sm',
+                        text: 'Join',
+                        click: function() {
+                            joinRoom(room);
+                        }
+                    });
+
+                    li.append(joinButton);
+                    $('#roomList').append(li);
+                });
+            }
+
+            function joinRoom(room) {
+                currentRoomId = room.roomId;
+                $('#roomName').text(room.roomName);
+                $('#chatArea').removeClass('d-none');
+                loadMessages(room.roomId);
+
+                initSignalR(room.roomId);
+            }
+
+            function loadMessages(roomId) {
+                $.ajax({
+                    url: '/api/rooms/' + roomId + '/messages',
+                    method: 'GET',
+                    success: function(response) {
+                        displayMessages(response);
+                    },
+                    error: function(xhr, status, error) {
+                        console.log('Error loading messages:', error);
+                    }
+                });
+            }
+
+            function showToast(message, type = 'success') {
+                Toastify({
+                    text: message,
+                    duration: 3000,
+                    close: true,
+                    gravity: "top",
+                    position: "right",
+                    backgroundColor: type === 'success' ? 'green' : 'red',
+                    stopOnFocus: true,
+                }).showToast();
+            }
+
+            function displayMessages(messages) {
+                $('.chat-window').empty();
+
+                messages.forEach(function(message) {
+                    debugger;
+                    var formattedDate = new Date(message.creationDate).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    var messageElement = $('<div class="message"></div>');
+        var formattedDate = new Date(message.creationDate).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        var messageElement = $('<div class="message"></div>');
+
+        if (message.isFromMe) {
+            messageElement.addClass('left').html(
+                '<div class="header">' +
+                '<strong>You' + (message.loginCount > 0 ? ' (' + message.loginCount + ')' : '') + '</strong>' +
+                '<short class="text-end">' + formattedDate + '</short>' +
+                '</div>' +
+                '<p>' + message.message + '</p>'
+            );
+        } else {
+            messageElement.addClass('right bg-primary-subtle').html(
+                '<div class="header">' +
+                '<strong>' + message.sender + (message.loginCount > 0 ? ' (' + message.loginCount + ')' : '') + '</strong>' +
+                '<short class="text-end">' + formattedDate + '</short>' +
+                '</div>' +
+                '<p>' + message.message + '</p>'
+            );
+        }
+
+        $('.chat-window').append(messageElement);
+
+
+
+                    $('.chat-window').append(messageElement)
+                });
+            }
+
+            function initSignalR(roomId) {
+                const chatServiceUrl = "https://localhost:7176";
+                const connection = new signalR.HubConnectionBuilder()
+                    .withUrl(chatServiceUrl + "/chatHub?roomId=" + roomId)
+                    .build();
+
+                connection.start().then(function() {
+                    console.log("Connected to the chat service.");
+
+                    connection.on("UserConnected", function(user) {
+                        showToast("User connected: " + user, 'success');
+                    });
+
+                    connection.on("UserDisconnected", function(user) {
+                        showToast("User disconnected: " + user, 'warning');
+                    });
+
+                    connection.on("ReceiveMessage", function(message) {
+                        var formattedDate = new Date(message.creationDate).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+
+                        var messageElement = $('<div class="message"></div>');
+
+                        if (message.sender == username) {
+                            messageElement.addClass('left').html(
+                                '<div class="header">' +
+                                '<strong>You:</strong>' +
+                                '<short class="text-end">' + formattedDate + '</short>' +
+                                '</div>' +
+                                '<p>' + message.message + '</p>'
+                            );
+                        } else {
+                            messageElement.addClass('right bg-primary-subtle').html(
+                                '<div class="header">' +
+                                '<strong>' + message.sender + ':</strong>' +
+                                '<short class="text-end">' + formattedDate + '</short>' +
+                                '</div>' +
+                                '<p>' + message.message + '</p>'
+                            );
+                        }
+
+                        $('.chat-window').append(messageElement);
+                        $('.chat-window').animate({
+                            scrollTop: $('.chat-window')[0].scrollHeight
+                        }, 500);
+                    });
+
+                }).catch(function(err) {
+                    return console.error(err.toString());
+                });
+            }
+
+        });
+    </script>
+</body>
+
+</html>
