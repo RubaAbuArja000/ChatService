@@ -8,7 +8,6 @@ A simple chat service built using ASP.NET Core, SignalR, Microsoft Orleans, and 
 - [.NET Core SDK](https://dotnet.microsoft.com/download) (6.0+)
 - [Redis](https://redis.io/download)
 - [Visual Studio Code](https://code.visualstudio.com/) or any IDE
-- [Node.js](https://nodejs.org/)
 
 ## Setup
 
@@ -37,7 +36,7 @@ Build and Run the application:
 
 1. **Start the server**:
 
+   To start the server, run the following command in your terminal:
+
    ```bash
    dotnet run
-vice .
-docker run -p 5000:5000 chat-service
